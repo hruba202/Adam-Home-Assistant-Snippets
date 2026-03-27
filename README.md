@@ -12,6 +12,7 @@ There are a number of improvements necessary to make this particular project mor
 
 #####
 I have modified the code for the Elecrow CrowPanel Advance 7.0 v1.2.
-Fixed an audio issue where responses could not be heard
-Added backlight brightness control
+Fixed an audio issue where responses could not be heard.
+Added backlight brightness control.
+Increased the PSRAM speed to 120Mhz.
 But still improvements are needed,no text responses on the display.....
