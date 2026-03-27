@@ -16,3 +16,4 @@ Fixed an audio issue where responses could not be heard.
 Added backlight brightness control.
 Increased the PSRAM speed to 120Mhz.
 But still improvements are needed,no text responses on the display.....
+Added yaml to voice assistant and control panel (https://github.com/strange-v/RemoteWebViewClient)
