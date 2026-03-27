@@ -155,7 +155,7 @@ media_player:
     name: None
     id: speaker_media_player
     volume_min: 0.3
-    volume_max: 0.6
+    volume_max: 0.8
     announcement_pipeline:
       speaker: box_speaker
       format: FLAC
