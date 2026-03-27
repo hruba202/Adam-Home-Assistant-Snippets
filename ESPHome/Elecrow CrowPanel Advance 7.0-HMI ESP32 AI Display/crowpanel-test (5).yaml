@@ -1,0 +1,604 @@
+substitutions:
+  ha_dash_url: http://192.168.0.36:8123/home/overview
+  listening_illustration_file: https://github.com/esphome/wake-word-voice-assistants/raw/main/casita/listening_320_240.png
+  
+  listening_illustration_background_color: "FFFFFF"
+  # Voice assistant phase IDs
+  voice_assist_not_ready_phase_id: "0"
+  voice_assist_idle_phase_id: "1"
+  voice_assist_listening_phase_id: "2"
+  voice_assist_thinking_phase_id: "3"
+  voice_assist_replying_phase_id: "4"
+  voice_assist_error_phase_id: "5"
+  voice_assist_muted_phase_id: "6"
+  voice_assist_timer_finished_phase_id: "7"
+
+
+esphome:
+  name: "panelr1"
+  friendly_name: panelr1
+  min_version: 2025.5.0
+  name_add_mac_suffix: true
+  platformio_options:
+    build_flags: "-DBOARD_HAS_PSRAM"
+    board_build.esp-idf.memory_type: qio_opi
+    board_build.flash_mode: dio
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  cpu_frequency: 240MHz
+  framework:
+    type: esp-idf
+    advanced:
+      enable_idf_experimental_features: true
+    sdkconfig_options:
+      COMPILER_OPTIMIZATION_SIZE: y
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y
+    components:
+      - name: "espressif/esp_websocket_client"
+        ref: 1.5.0
+      - name: "bitbank2/jpegdec"
+        source: https://github.com/strange-v/jpegdec-esphome
+
+# Enable logging
+logger:
+  level: DEBUG
+  logs:
+    touch: DEBUG
+    display: DEBUG
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret esp_encryption_key
+
+ota:
+  - platform: esphome
+    password: "hrubaxxx"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 192.168.0.68
+    gateway: 192.168.0.2
+    subnet: 255.255.255.0
+  ap:
+    ssid: "Crowpaneltest Fallback Hotspot"
+
+captive_portal:
+
+
+psram:
+  mode: octal
+  speed: 120MHz
+
+i2c:
+  sda: 15
+  scl: 16
+  frequency: 400000
+  id: i2c_bus_a
+
+# Backlight configuration pro v1.2
+output:
+  - platform: template
+    id: backlight_output
+    type: float
+    write_action:
+      - lambda: |-
+          uint8_t brightness = 0x05 + (uint8_t)(state * (0x10 - 0x05));
+          id(i2c_bus_a).write(0x30, &brightness, 1, true);
+
+light:
+  - platform: monochromatic
+    name: "Backlight"
+    output: backlight_output
+    id: backlight
+    restore_mode: ALWAYS_ON
+
+display:
+  - platform: rpi_dpi_rgb
+    id: my_display
+    color_order: RGB
+    invert_colors: true
+    update_interval: 33ms
+    auto_clear_enabled: false
+    dimensions:
+      width: 800
+      height: 480
+    de_pin: 42
+    hsync_pin: 40
+    vsync_pin: 41
+    pclk_pin: 39
+    pclk_frequency: 18MHz
+    data_pins:
+      red:
+        - 7
+        - 17
+        - 18
+        - 3
+        - 46
+      green:
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+      blue:
+        - 21
+        - 47
+        - 48
+        - 45
+        - 38
+
+touchscreen:
+  platform: gt911
+  id: touch_gt911
+  address: 0x5D
+
+external_components:
+  - source: github://strange-v/RemoteWebViewClient@main
+    refresh: 0s
+    components: [ remote_webview ]
+
+remote_webview:
+  id: rwv
+  server: 192.168.0.36:8081
+  url: http://192.168.0.36:8123
+  full_frame_tile_count: 1
+  full_frame_area_threshold: 0.50
+  full_frame_every: 50
+  
+  jpeg_quality: 75
+  max_bytes_per_msg: 79428
+text:
+  - platform: template
+    id: rwv_url
+    name: "URL"
+    optimistic: true
+    restore_value: false
+    mode: TEXT
+    min_length: 1
+    set_action:
+      - lambda: |-
+          if (!id(rwv).open_url(std::string(x.c_str()))) {
+            id(rwv).set_url(std::string(x.c_str()));
+            ESP_LOGI("remote_webview", "URL queued (not connected): %s", x.c_str());
+          }
+
+i2s_audio:
+  - id: i2s_spk_bus
+    i2s_lrclk_pin: GPIO6
+    i2s_bclk_pin: GPIO5
+
+  - id: i2s_mic_bus
+    i2s_lrclk_pin: GPIO2
+    i2s_bclk_pin: GPIO19
+
+microphone:
+  - platform: i2s_audio
+    id: box_mic
+    i2s_audio_id: i2s_mic_bus
+    i2s_din_pin: GPIO20
+    adc_type: external
+    bits_per_sample: 16bit
+    channel: left
+
+speaker:
+  - platform: i2s_audio
+    id: box_speaker
+    i2s_audio_id: i2s_spk_bus
+    i2s_dout_pin: GPIO4
+    dac_type: external
+    sample_rate: 48000
+    bits_per_sample: 16bit
+    channel: mono
+    buffer_duration: 200ms
+    timeout: 1000ms
+
+media_player:
+  - platform: speaker
+    name: None
+    id: speaker_media_player
+    volume_min: 0.3
+    volume_max: 0.8
+    announcement_pipeline:
+      speaker: box_speaker
+      format: FLAC
+      sample_rate: 48000
+      num_channels: 1
+    files:
+      - id: timer_finished_sound
+        file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/timer_finished.flac
+    on_announcement:
+      - lambda: |-
+          uint8_t cmd[1] = { 0x17 };
+          id(i2c_bus_a).write(0x30, cmd, 1);
+      - delay: 400ms
+      - if:
+          condition:
+            - microphone.is_capturing:
+          then:
+            - script.execute: stop_wake_word
+            - if:
+                condition:
+                  - lambda: return id(wake_word_engine_location).state == "In Home Assistant";
+                then:
+                  - wait_until:
+                      - not:
+                          voice_assistant.is_running:
+      - if:
+          condition:
+            not:
+              voice_assistant.is_running:
+          then:
+            - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+
+    on_idle:
+      - delay: 600ms
+      - lambda: |-
+          uint8_t cmd[1] = { 0x18 };
+          id(i2c_bus_a).write(0x30, cmd, 1);
+      - if:
+          condition:
+            not:
+              voice_assistant.is_running:
+          then:
+            - script.execute: start_wake_word
+            - script.execute: set_idle_or_mute_phase
+
+micro_wake_word:
+  id: mww
+  models:
+    - okay_nabu
+    - hey_mycroft
+    - hey_jarvis
+  on_wake_word_detected:
+    - voice_assistant.start:
+        wake_word: !lambda return wake_word;
+
+voice_assistant:
+  id: va
+  microphone: box_mic
+  media_player: speaker_media_player
+  micro_wake_word: mww
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 2.0
+
+  on_tts_start:
+    - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
+    - script.execute: draw_display
+  on_end:
+    - wait_until:
+        condition:
+          - media_player.is_announcing:
+        timeout: 0.5s
+    - wait_until:
+        - and:
+            - not:
+                media_player.is_announcing:
+            - not:
+                speaker.is_playing:
+    - if:
+        condition:
+          - lambda: return id(wake_word_engine_location).state == "On device";
+        then:
+          - lambda: id(va).set_use_wake_word(false);
+          - micro_wake_word.start:
+    - script.execute: set_idle_or_mute_phase
+
+  on_error:
+    - if:
+        condition:
+          lambda: return !id(init_in_progress);
+        then:
+          - lambda: id(voice_assistant_phase) = ${voice_assist_error_phase_id};
+          - delay: 1s
+          - if:
+              condition:
+                switch.is_off: mute
+              then:
+                - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+              else:
+                - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+
+  on_client_connected:
+    - lambda: id(init_in_progress) = false;
+    - script.execute: start_wake_word
+    - script.execute: set_idle_or_mute_phase
+
+  on_client_disconnected:
+    - script.execute: stop_wake_word
+    - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
+
+  on_timer_finished:
+    - switch.turn_on: timer_ringing
+    - wait_until:
+        media_player.is_announcing:
+    - lambda: id(voice_assistant_phase) = ${voice_assist_timer_finished_phase_id};
+
+  on_tts_end:
+    - script.execute:
+        id: send_tts_uri_event
+        tts_uri: !lambda 'return x;'
+
+script:
+  - id: send_tts_uri_event
+    parameters:
+      tts_uri: string
+    then:
+      - homeassistant.event:
+          event: esphome.tts_uri
+          data:
+            uri: !lambda return tts_uri;
+
+  - id: send_stt_text_event
+    parameters:
+      stt_text: string
+    then:
+      - homeassistant.event:
+          event: esphome.stt_text
+          data:
+            text: !lambda return stt_text;
+
+  - id: fetch_first_active_timer
+    then:
+      - lambda: |
+          const auto timers = id(va).get_timers();
+          auto output_timer = *timers.begin();
+          for (const auto &t : timers) {
+            if (t.is_active && t.seconds_left <= output_timer.seconds_left) {
+              output_timer = t;
+            }
+          }
+          id(global_first_active_timer) = output_timer;
+
+  - id: check_if_timers_active
+    then:
+      - lambda: |
+          const auto timers = id(va).get_timers();
+          bool output = false;
+          if (timers.size() > 0) {
+            for (const auto &t : timers) {
+              if (t.is_active) {
+                output = true;
+              }
+            }
+          }
+          id(global_is_timer_active) = output;
+
+  - id: fetch_first_timer
+    then:
+      - lambda: |
+          const auto timers = id(va).get_timers();
+          auto output_timer = *timers.begin();
+          for (const auto &t : timers) {
+            if (t.seconds_left <= output_timer.seconds_left) {
+              output_timer = t;
+            }
+          }
+          id(global_first_timer) = output_timer;
+
+  - id: check_if_timers
+    then:
+      - lambda: |
+          const auto timers = id(va).get_timers();
+          bool output = false;
+          if (timers.size() > 0) {
+            output = true;
+          }
+          id(global_is_timer) = output;
+
+  - id: start_wake_word
+    then:
+      - if:
+          condition:
+            and:
+              - not:
+                  - voice_assistant.is_running:
+              - lambda: return id(wake_word_engine_location).state == "On device";
+          then:
+            - lambda: id(va).set_use_wake_word(false);
+            - micro_wake_word.start:
+      - if:
+          condition:
+            and:
+              - not:
+                  - voice_assistant.is_running:
+              - lambda: return id(wake_word_engine_location).state == "In Home Assistant";
+          then:
+            - lambda: id(va).set_use_wake_word(true);
+            - voice_assistant.start_continuous:
+
+  - id: stop_wake_word
+    then:
+      - if:
+          condition:
+            lambda: return id(wake_word_engine_location).state == "In Home Assistant";
+          then:
+            - lambda: id(va).set_use_wake_word(false);
+            - voice_assistant.stop:
+      - if:
+          condition:
+            lambda: return id(wake_word_engine_location).state == "On device";
+          then:
+            - micro_wake_word.stop:
+
+  - id: set_idle_or_mute_phase
+    then:
+      - if:
+          condition:
+            switch.is_off: mute
+          then:
+            - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+          else:
+            - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+
+
+  - id: draw_display
+    then:
+      - if:
+          condition:
+            lambda: return !id(init_in_progress);
+          then:
+            - if:
+                condition:
+                  wifi.connected:
+                then:
+                  - if:
+                      condition:
+                        api.connected:
+                      then:
+                      - if: { condition: { lambda: 'return id(voice_assistant_phase) == ${voice_assist_listening_phase_id};'  }, then: { lvgl.page.show: listening_page } }
+
+switch:
+  - platform: template
+    name: Stream
+    optimistic: true
+    on_turn_on:
+      - microphone.capture:
+    on_turn_off:
+      - microphone.stop_capture:
+
+  - platform: template
+    name: Mute
+    id: mute
+    icon: "mdi:microphone-off"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: config
+    on_turn_off:
+      - microphone.unmute:
+      - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+    on_turn_on:
+      - microphone.mute:
+      - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+
+  - platform: template
+    id: timer_ringing
+    optimistic: true
+    internal: true
+    restore_mode: ALWAYS_OFF
+    on_turn_off:
+      - lambda: |-
+          id(speaker_media_player)
+            ->make_call()
+            .set_command(media_player::MediaPlayerCommand::MEDIA_PLAYER_COMMAND_REPEAT_OFF)
+            .set_announcement(true)
+            .perform();
+          id(speaker_media_player)->set_playlist_delay_ms(speaker::AudioPipelineType::ANNOUNCEMENT, 0);
+      - media_player.stop:
+          announcement: true
+    on_turn_on:
+      - lambda: |-
+          id(speaker_media_player)
+            ->make_call()
+            .set_command(media_player::MediaPlayerCommand::MEDIA_PLAYER_COMMAND_REPEAT_ONE)
+            .set_announcement(true)
+            .perform();
+          id(speaker_media_player)->set_playlist_delay_ms(speaker::AudioPipelineType::ANNOUNCEMENT, 1000);
+      - media_player.speaker.play_on_device_media_file:
+          media_file: timer_finished_sound
+          announcement: true
+      - delay: 15min
+      - switch.turn_off: timer_ringing
+
+select:
+  - platform: template
+    entity_category: config
+    name: Wake word engine location
+    id: wake_word_engine_location
+    icon: "mdi:account-voice"
+    optimistic: true
+    restore_value: true
+    options:
+      - In Home Assistant
+      - On device
+    initial_option: On device
+    on_value:
+      - if:
+          condition:
+            lambda: return !id(init_in_progress);
+          then:
+            - wait_until:
+                lambda: return id(voice_assistant_phase) == ${voice_assist_muted_phase_id} || id(voice_assistant_phase) == ${voice_assist_idle_phase_id};
+            - if:
+                condition:
+                  lambda: return x == "In Home Assistant";
+                then:
+                  - micro_wake_word.stop
+                  - delay: 500ms
+                  - if:
+                      condition:
+                        switch.is_off: mute
+                      then:
+                        - lambda: id(va).set_use_wake_word(true);
+                        - voice_assistant.start_continuous:
+            - if:
+                condition:
+                  lambda: return x == "On device";
+                then:
+                  - lambda: id(va).set_use_wake_word(false);
+                  - voice_assistant.stop
+                  - delay: 500ms
+                  - if:
+                      condition:
+                        switch.is_off: mute
+                      then:
+                        - micro_wake_word.start
+
+globals:
+  - id: counter
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: init_in_progress
+    type: bool
+    restore_value: false
+    initial_value: "true"
+  - id: voice_assistant_phase
+    type: int
+    restore_value: false
+    initial_value: ${voice_assist_not_ready_phase_id}
+  - id: global_first_active_timer
+    type: voice_assistant::Timer
+    restore_value: false
+  - id: global_is_timer_active
+    type: bool
+    restore_value: false
+  - id: global_first_timer
+    type: voice_assistant::Timer
+    restore_value: false
+  - id: global_is_timer
+    type: bool
+    restore_value: false
+
+color:
+  - id: listening_color
+    hex: ${listening_illustration_background_color}
+
+
+lvgl:
+  
+  pages:
+    - id: listening_page
+      bg_color: listening_color
+      widgets:
+        - image:
+            src: casita_listening
+            align: CENTER
+
+image:
+  - file: ${listening_illustration_file}
+    id: casita_listening
+    resize: 320x240
+    type: RGB565
+    transparency: alpha_channel
