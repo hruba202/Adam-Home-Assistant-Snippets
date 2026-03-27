@@ -1,5 +1,7 @@
+# Voice assistant + control panel (https://github.com/strange-v/RemoteWebViewClient)
+
 substitutions:
-  ha_dash_url: http://192.168.0.36:8123/home/overview
+  ha_dash_url: http://192.168.x.x:8123/home/overview
   listening_illustration_file: https://github.com/esphome/wake-word-voice-assistants/raw/main/casita/listening_320_240.png
   
   listening_illustration_background_color: "FFFFFF"
@@ -56,18 +58,18 @@ logger:
 # Enable Home Assistant API
 api:
   encryption:
-    key: !secret esp_encryption_key
+    key: "xxxxxxxx"
 
 ota:
   - platform: esphome
-    password: "hrubaxxx"
+    password: "xxxxxxxx"
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   manual_ip:
-    static_ip: 192.168.0.68
-    gateway: 192.168.0.2
+    static_ip: 192.168.x.x
+    gateway: 192.168.x.x
     subnet: 255.255.255.0
   ap:
     ssid: "Crowpaneltest Fallback Hotspot"
@@ -150,7 +152,7 @@ external_components:
 
 remote_webview:
   id: rwv
-  server: 192.168.0.36:8081
+  server: http:// ha.ip:8081 #If installed as an ha add-on
   url: http://192.168.0.36:8123
   full_frame_tile_count: 1
   full_frame_area_threshold: 0.50
