@@ -74,7 +74,7 @@ psram:
 
 api:
   encryption:
-    key: !secret esp_encryption_key
+    key: "xxxxxxxx"
 
   on_client_connected:
     - script.execute: draw_display
@@ -93,8 +93,8 @@ wifi:
   ap:
 
   manual_ip:
-    static_ip: 192.168.0.67
-    gateway: 192.168.0.2
+    static_ip: 192.168.x.x
+    gateway: 192.168.x.x
     subnet: 255.255.255.0
   on_connect:
     - script.execute: draw_display
